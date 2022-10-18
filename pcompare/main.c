@@ -1,7 +1,7 @@
 /**
  *  A.V.Ustinov <austinprog@yandex.ru>
  * The utility downloads two branches from PACKAGE_URL, compare them,
- * and oitput comparison statistic in JSON format that includes 3 arrays:
+ * and output comparison statistic in JSON format that includes 3 arrays:
  * 1. Which packages is absent in first branch
  * 2. Which packages is absent in second branch
  * 3. All packages in first branch with newer version then in second one
@@ -437,7 +437,7 @@ static int get_packages_info(const json_object *wrapper, json_packages_t *info)
     info->packages_array = json_object_object_get(wrapper, PACKAGES_TAG);
     if (!info->packages_array)
     {
-        printf("Couln't find packages array!");
+        printf("Couln't find packages array!\n");
         return ERROR;
     }
 
@@ -656,8 +656,11 @@ int main(int argc, char *argv[])
     const size_t n_branches_to_compare = N_BRANCHES_TO_COMPARE_SUPPORTED;
     f_param_t fparam[n_branches_to_compare];
 
-    if (argc < (N_BRANCHES_TO_COMPARE_SUPPORTED + 1))
+    if (argc != (N_BRANCHES_TO_COMPARE_SUPPORTED + 1))
+    {
         printf("Please, enter %d names of branches\n", N_BRANCHES_TO_COMPARE_SUPPORTED);
+        return ERROR;
+    }
 
     fparam[0].pack_name = argv[1];
     fparam[1].pack_name = argv[2];
