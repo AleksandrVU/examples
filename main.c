@@ -1,3 +1,11 @@
+/**
+ *  A.V.Ustinov <austinprog@yandex.ru>
+ * The utility downloads two branches from PACKAGE_URL, compare them,
+ * and oitput comparison statistic in JSON format that includes 3 arrays:
+ * 1. Which packages is absent in first branch
+ * 2. Which packages is absent in second branch
+ * 3. All packages in first branch with newer version then in second one
+ */
 #include <stdio.h>
 #include <json-c/json.h>
 #include <sys/mman.h>
@@ -27,31 +35,34 @@ const char *NAME_TAG     = "name";
 const char *VERSION_TAG  = "version";
 const char *PACKAGES_TAG = "packages";
 
-
+// structure to store JSON file parameters
 typedef struct f_param
 {
-    const char  *pack_name;
-    int         fd;
-    size_t      size;
-    void        *fptr;
-    json_object *wrapper;
+    const char  *pack_name; //package branch name
+    int         fd;         //opened file descripror
+    size_t      size;       //file size
+    void        *fptr;      //mapped file data pointer
+    json_object *wrapper;   //main JSON object pointer
  }f_param_t;
 
+//structure to store branches comparison statistic
 typedef struct
 {
     size_t *absent_packages_indexes[N_BRANCHES_TO_COMPARE_SUPPORTED];   //stores package indexes of absent packages in current branch
     size_t *version_indexes[N_BRANCHES_TO_CHECK_VERSION];               //stores package indexes with newer version
-    size_t index_couters[N_BRANCHES_TO_COMPARE_SUPPORTED];                                              //counters of absent packages
+    size_t index_couters[N_BRANCHES_TO_COMPARE_SUPPORTED];              //counters of absent packages
     size_t version_counter;                                             //counter of first packages with newer version value
     size_t n_branches;                                                  //number of branches to compare (for the release it 2)
 }branches_statistic_t;
 
+// structure to store JSON packets array information
 typedef struct
 {
-    json_object *packages_array;
-    size_t      packages_array_length;
+    json_object *packages_array;        //pointer to an array of packets info
+    size_t      packages_array_length;  //the array length
 }json_packages_t;
 
+//Codes inicates of pacjages array scanning
 typedef enum
 {
     GO_AHEAD = 0,
@@ -61,11 +72,11 @@ typedef enum
 }continue_result_t;
 
 /**
- * @brief close_files
- * @param fparam
- * @param count
+ * @brief close_files   unmap and close files with JSON packages info
+ * @param fparam    pointer to an array of f_param_t strictures
+ * @param count     number of opened files
  */
-static void close_files(f_param_t *fparam, int count)
+static void close_files(f_param_t *fparam, const int count)
 {
     for ( int i =0; i < count; ++i)
     {
@@ -84,9 +95,9 @@ static void close_files(f_param_t *fparam, int count)
 }
 
 /**
- * @brief map_file
- * @param fparam
- * @return
+ * @brief map_file  maps loaded files
+ * @param fparam    pointer to a f_param_t structure
+ * @return          SUCCESS on success, ERROR otherwise
  */
 static int map_file(f_param_t * fparam)
 {
@@ -124,9 +135,9 @@ static int map_file(f_param_t * fparam)
 }
 
 /**
- * @brief json_file_parse
- * @param param
- * @return
+ * @brief json_file_parse   JSON file parsing
+ * @param param             pointer to a f_param_t structure
+ * @return                  SUCCESS on success, ERROR otherwise
  */
 void * json_file_parse(void * param)
 {
@@ -141,14 +152,12 @@ void * json_file_parse(void * param)
 }
 
 /**
- * @brief json_load
- * @param param
- * @return
+ * @brief json_load loads branch information to a file
+ * @param fparam    pointer to a f_param_t structure
+ * @return          SUCCESS on success, ERROR otherwise
  */
-int json_load(void *param)
+int json_load(const f_param_t *fparam)
 {
-    return SUCCESS;     ///!!!DELME
-    f_param_t *fparam = (f_param_t*)param;
     char url[MAX_COMMAND_LEN];
     char fname[MAX_COMMAND_LEN];
 
@@ -206,10 +215,10 @@ int json_load(void *param)
 }
 
 /**
- * @brief load_packages
- * @param fparam
- * @param n_branches
- * @return
+ * @brief load_packages  loads packages information to appropriated file
+ * @param fparam        - pointer to a f_param_t structure
+ * @param n_branches    - number of branches
+ * @return              SUCCESS on success, ERROR otherwise
  */
 int load_packages(f_param_t *fparam, const size_t n_branches)
 {
@@ -226,10 +235,10 @@ int load_packages(f_param_t *fparam, const size_t n_branches)
 }
 
 /**
- * @brief mapping_files
- * @param fparam
- * @param n_branches
- * @return
+ * @brief mapping_files maps files with loaded JSON structures
+ * @param fparam        - pointer to f_param_t structure
+ * @param n_branches    - number of branches
+ * @return              SUCCESS on success, ERROR otherwise
  */
 int mapping_files(f_param_t *fparam, const size_t n_branches)
 {
@@ -247,10 +256,10 @@ int mapping_files(f_param_t *fparam, const size_t n_branches)
 }
 
 /**
- * @brief parsing_json_files
- * @param fparam
- * @param n_branches
- * @return
+ * @brief parsing_json_files - parsing JSON files in separate threads
+ * @param fparam            - pointer to f_param_t structure
+ * @param n_branches        - number of branches
+ * @return                  SUCCESS on success, ERROR otherwise
  */
 int parsing_json_files(f_param_t *fparam, const size_t n_branches)
 {
@@ -273,17 +282,16 @@ int parsing_json_files(f_param_t *fparam, const size_t n_branches)
 
 /**
  * @brief compare_tags  - compare 2 json strings values
- * @param iter          - pointer to an array of json objects
+ * @param iters          - pointer to an array of json objects
  * @param n_branches    - number of branches to compare, suppotred only for 2 branches
- * @param tag
- * @return
+ * @param tag           - pointer to a tag string
+ * @return              result of strcmp function
  */
-int compare_tags(json_object **iter, const size_t n_branches, const char *tag)
+int compare_tags(json_object **iters, const size_t n_branches, const char *tag)
 {
-    static size_t count = 0;
     json_object * tag_obj[n_branches];
     for( size_t j = 0; j < n_branches; ++j)
-            tag_obj[j] = json_object_object_get(iter[j], tag);
+            tag_obj[j] = json_object_object_get(iters[j], tag);
     const char * tag_val[n_branches];
     for( size_t j = 0; j < n_branches; ++j)
         tag_val[j] = json_object_get_string(tag_obj[j]);
@@ -293,30 +301,30 @@ int compare_tags(json_object **iter, const size_t n_branches, const char *tag)
 }
 
 /**
- * @brief next_position_depend_on_compare_result
- * @param res
- * @param counters
- * @param packages_info
- * @return
+ * @brief next_position_depend_on_compare_result    shifts next position in packages array depending on compared packages' names result
+ * @param res                                       comparison result
+ * @param counters                                  pointer to an array of packages' arrays current indexes positions
+ * @param packages_info                             pointer to an array of json_packages_t structures
+ * @return                                          continue_result_t code
  */
-continue_result_t next_position_depend_on_compare_result(int res, size_t *counters, json_packages_t *packages_info)// limit for 2 branches only!
+continue_result_t next_position_depend_on_compare_result(const int res, size_t *counters, const json_packages_t *packages_info)// limit for 2 branches only!
 {
     continue_result_t cont_result = GO_AHEAD;
-    if (res <= 0)
+    if (counters[0] >= (packages_info[0].packages_array_length - 1))
     {
-        if (counters[0] < (packages_info[0].packages_array_length - 1))
-        {
-            ++counters[0];
-        }
-        else cont_result = FIRST_FINISHED;
+        cont_result = FIRST_FINISHED;
     }
-    if (res >= 0)
+    else if (res <= 0)
     {
-        if (counters[1] < (packages_info[1].packages_array_length - 1))
-        {
-            ++counters[1];
-        }
-        else cont_result |= SECOND_FINISHED;
+        ++counters[0];
+    }
+    if (counters[1] >= (packages_info[1].packages_array_length - 1))
+    {
+        cont_result |= SECOND_FINISHED;
+    }
+    else if (res >= 0)
+    {
+        ++counters[1];
     }
     return cont_result;
 }
@@ -327,7 +335,7 @@ continue_result_t next_position_depend_on_compare_result(int res, size_t *counte
  * @param iter        - pointer to an array of branches packet JSON objects
  * @param n_branches  - number of branches to compare
  */
-void compare_out(json_object **iter, const size_t n_branches)
+void compare_out(const json_object **iter, const size_t n_branches)
 {
     const char *tags_to_out[N_OUT_PARAMS] = {NAME_TAG, VERSION_TAG, ARCH_TAG};
     printf("\n{\n");
@@ -349,7 +357,7 @@ void compare_out(json_object **iter, const size_t n_branches)
  * @param arr                   pointer to an array of allocated arrays
  * @param n_arrays              number of arrays
  */
-void free_arrays_memory(size_t **arr, size_t n_arrays)
+void free_arrays_memory(size_t **arr, const size_t n_arrays)
 {
     for (size_t i = 0; i < n_arrays; ++i)
     {
@@ -359,13 +367,13 @@ void free_arrays_memory(size_t **arr, size_t n_arrays)
 }
 
 /**
- * @brief init_arrays
- * @param arr
- * @param packages_info
- * @param n_arrays
- * @return
+ * @brief init_arrays   - allocates memory for arrays
+ * @param arr           - array of pointers to arrays that wil be allocated
+ * @param packages_info - array of json_packages_t structures
+ * @param n_arrays      - number of array to initiate
+ * @return              SUCCESS code on success, ERROR otherwise
  */
-int init_arrays(size_t **arr, json_packages_t *packages_info, size_t n_arrays)
+int init_arrays(size_t **arr, const json_packages_t *packages_info, const size_t n_arrays)
 {
     for (size_t i = 0; i < n_arrays; ++i)
     {
@@ -381,9 +389,8 @@ int init_arrays(size_t **arr, json_packages_t *packages_info, size_t n_arrays)
 }
 
 /**
- * @brief destroy_branch_statistic
- * @param stat
- * @param n_branches
+ * @brief destroy_branch_statistic  calls release memory for allocated arrays
+ * @param stat                      pointer to branches_statistic_t structure
  */
 void destroy_branch_statistic(branches_statistic_t *stat)
 {
@@ -392,13 +399,13 @@ void destroy_branch_statistic(branches_statistic_t *stat)
 }
 
 /**
- * @brief init_branch_statistic
- * @param stat
- * @param packages_info
- * @param n_branches
- * @return
+ * @brief init_branch_statistic     initiates btanches statistic structure and allocates memory for its arrays
+ * @param stat                      pointer to branches_statistic_t structure
+ * @param packages_info             pointer to an array of json_packages_t structures
+ * @param n_branches                number of branches to process
+ * @return                      SUCCESS code on success, ERROR code otherwise
  */
-int init_branch_statistic(branches_statistic_t *stat, json_packages_t *packages_info, size_t n_branches)
+static int init_branch_statistic(branches_statistic_t *stat, const json_packages_t *packages_info, const size_t n_branches)
 {
 
     int res = init_arrays(stat->absent_packages_indexes, packages_info, n_branches);
@@ -420,12 +427,12 @@ int init_branch_statistic(branches_statistic_t *stat, json_packages_t *packages_
 }
 
 /**
- * @brief get_packages_info
- * @param wrapper
- * @param info
- * @return
+ * @brief get_packages_info  gets information about packages arrays and their length
+ * @param wrapper           pointer to a main JSON object
+ * @param info              pointer to a json_packages_t structure
+ * @return                  SUCCESS code on success, ERROR code otherwise
  */
-int get_packages_info(json_object *wrapper, json_packages_t *info)
+static int get_packages_info(const json_object *wrapper, json_packages_t *info)
 {
     info->packages_array = json_object_object_get(wrapper, PACKAGES_TAG);
     if (!info->packages_array)
@@ -439,12 +446,12 @@ int get_packages_info(json_object *wrapper, json_packages_t *info)
 }
 
 /**
- * @brief update_branches_statistic - depend on compare result store index of absent package
+ * @brief update_branches_statistic - stores index of absent package depend on compare result
  * @param stat                      pointer to branches_statistic_t structure
  * @param res                       comparison result of packages names
  * @param counters                  package counters array
  */
-void update_branches_statistic(branches_statistic_t *stat, int res, size_t *counters)  //NOTE: for 2 branches only
+static void update_branches_statistic(branches_statistic_t *stat, const int res, const size_t *counters)  //NOTE: for 2 branches only
 {
     if (res < EQUAL)    //if package in first branch absent in second
     {
@@ -458,12 +465,12 @@ void update_branches_statistic(branches_statistic_t *stat, int res, size_t *coun
 }
 
 /**
- * @brief update_version_statistic
- * @param stat
- * @param res
- * @param counters
+ * @brief update_version_statistic  - stores indexes of packages in branch BRANCH_TO_CHECK_VERSION with newer vestion then other
+ * @param stat                  pointer to branches_statistic_t structure
+ * @param res                   comparison result of packages names
+ * @param counters              package counters array
  */
-void update_version_statistic(branches_statistic_t *stat, int res, size_t *counters)//NOTE: for 2 branches only and Version1 > Vesrion2 condition
+static void update_version_statistic(branches_statistic_t *stat, const int res, const size_t *counters)//NOTE: for 2 branches only and Version1 > Vesrion2 condition
 {
     if (res < EQUAL) return;
     stat->version_indexes[BRANCH_TO_CHECK_VERSION][stat->version_counter] = counters[BRANCH_TO_CHECK_VERSION];
@@ -471,21 +478,21 @@ void update_version_statistic(branches_statistic_t *stat, int res, size_t *count
 }
 
 /**
- * @brief get_branches_statistic
- * @param packages_info
- * @param branches_statistic
- * @return
+ * @brief get_branches_statistic    scans and compares branches' packages and store scanning statistic
+ * @param packages_info             pointer to an array of packages_info structure
+ * @param branches_statistic        pointer to branches_statistic_t structure
+ * @return                          SUCCESS code on success, ERROR code otherwise
  */
-int get_branches_statistic(json_packages_t *packages_info, branches_statistic_t *branches_statistic)
+static int get_branches_statistic(const json_packages_t *packages_info, branches_statistic_t *branches_statistic)
 {
     const size_t n_branches = branches_statistic->n_branches;
     json_object * iters[n_branches];
     size_t counters[n_branches];
     size_t i;
-    continue_result_t can_continue;
+    continue_result_t can_continue = GO_AHEAD;
 
     for (i = 0; i < n_branches; ++i) counters[i] = 0;
-
+    int res;
     while (1)
     {
         for( size_t j = 0; j < n_branches; ++j)
@@ -497,8 +504,22 @@ int get_branches_statistic(json_packages_t *packages_info, branches_statistic_t 
                 return ERROR;
             }
         }
+        switch (can_continue)
+        {
+            case GO_AHEAD:
+                res = compare_tags(iters, n_branches, NAME_TAG);
+                break;
+            case FIRST_FINISHED:
+                res = 1;
+                break;
+            case SECOND_FINISHED:
+                res = -1;
+                break;
+            default:
+                printf("Unexpected code = %d\n", can_continue);
+                return ERROR;
+        }
 
-        int res = compare_tags(iters, n_branches, NAME_TAG);
         if ( res == EQUAL )
         {
             res = compare_tags(iters, n_branches, VERSION_TAG);
@@ -513,23 +534,22 @@ int get_branches_statistic(json_packages_t *packages_info, branches_statistic_t 
             update_branches_statistic(branches_statistic, res, counters);
         }
         can_continue = next_position_depend_on_compare_result(res, counters, packages_info);
-        if (can_continue != GO_AHEAD) break;
+        if (can_continue == BOTH_FINISHED) break;
     }
-
     return SUCCESS;
 }
 
 /**
- * @brief out_statistic_array
- * @param header
- * @param index_array
- * @param length
- * @param packages
+ * @brief out_statistic_array   output packages statistic in JSON array
+ * @param header                header(name) of JSON array
+ * @param index_array           array of indexes to output
+ * @param length                length of output array
+ * @param packages              pointer to an array of packages to output
  */
-void out_statistic_array(const char *header, size_t *index_array, size_t length, json_object *packages)
+static void out_statistic_array(const char *header, const size_t *index_array, const size_t length, const json_object *packages)
 {
     const char *tags_to_out[N_OUT_PARAMS] = {NAME_TAG, VERSION_TAG, ARCH_TAG};
-    length = 5;
+
     printf("\"length\": %lu,\n", length);
     printf("%s",header);
     for (size_t i = 0; i < length; )
@@ -556,12 +576,12 @@ void out_statistic_array(const char *header, size_t *index_array, size_t length,
 
 
 /**
- * @brief out_branches_statistic
- * @param fparam
- * @param packages_info
- * @param stat
+ * @brief out_branches_statistic    output branches comparison statistic. (NOTE - released for 2 branches only!)
+ * @param fparam                    pointer to an array of f_param_t structures
+ * @param packages_info             pointer to an array of json_packages_t structures
+ * @param stat                      pointer to a branches_statistic_t structure
  */
-void out_branches_statistic(f_param_t *fparam, json_packages_t *packages_info, branches_statistic_t *stat)
+static void out_branches_statistic(const f_param_t *fparam, const json_packages_t *packages_info, const branches_statistic_t *stat)
 {
 
     printf("{\n");
@@ -588,12 +608,12 @@ void out_branches_statistic(f_param_t *fparam, json_packages_t *packages_info, b
 }
 
 /**
- * @brief process_branches
- * @param fparam
- * @param n_branches
- * @return
+ * @brief process_branches  comparing packages' branches and output the result
+ * @param fparam            pointer to an array of f_param_t structures
+ * @param n_branches        number of branches to process
+ * @return                  SUCCESS code on success, ERROR code otherwise
  */
-int process_branches(f_param_t *fparam, const size_t n_branches)
+static int process_branches(const f_param_t *fparam, const size_t n_branches)
 {
     json_packages_t packages_info[n_branches];
     size_t i = 0;
@@ -625,28 +645,35 @@ int process_branches(f_param_t *fparam, const size_t n_branches)
     return SUCCESS;
 }
 
-
-int main()////int argc, char *argv[])
+/**
+ * @brief main  the main function of the utility
+ * @param argc  number of atguments
+ * @param argv  pointer to an array of srting arguments
+ * @return      SUCCESS code on success, ERROR code otherwise
+ */
+int main(int argc, char *argv[])
 {
     const size_t n_branches_to_compare = N_BRANCHES_TO_COMPARE_SUPPORTED;
     f_param_t fparam[n_branches_to_compare];
 
+    if (argc < (N_BRANCHES_TO_COMPARE_SUPPORTED + 1))
+        printf("Please, enter %d names of branches\n", N_BRANCHES_TO_COMPARE_SUPPORTED);
 
-    fparam[0].pack_name = PACKAGE1;////FIXME
-    fparam[1].pack_name = PACKAGE2;////FIXME
+    fparam[0].pack_name = argv[1];
+    fparam[1].pack_name = argv[2];
 
     printf("We'll compare package \"%s\" with \"%s\" one\n", fparam[0].pack_name, fparam[1].pack_name);
 
     /* Packages loading */
-    int res = load_packages(fparam, n_branches_to_compare);
-    if (res != SUCCESS)
+    int resl = load_packages(fparam, n_branches_to_compare);
+    if (resl != SUCCESS)
     {
         printf("Load error!\n");
-        return res;
+        return resl;
     }
 
     /* Mapping loading files */
-    res = mapping_files(fparam, n_branches_to_compare);
+    int res = mapping_files(fparam, n_branches_to_compare);
     if (res != SUCCESS)
     {
         printf("Mapping error!\n");
@@ -661,7 +688,7 @@ int main()////int argc, char *argv[])
         close_files(fparam, n_branches_to_compare);
         return res;
     }
-
+    /*Compares branches an out result JSON */
     res = process_branches(fparam, n_branches_to_compare);
 
 
