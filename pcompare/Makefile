@@ -28,8 +28,8 @@ OBJECTS_DIR   = ./
 
 ####### Files
 
-SOURCES       = main.c 
-OBJECTS       = main.o
+SOURCES       = main.c rpmvercmp.c
+OBJECTS       = main.o rpmvercmp.o
 DIST          = main.c
 DESTDIR       = 
 TARGET        = pcompare
@@ -38,11 +38,11 @@ TARGET        = pcompare
 first: all
 ####### Build rules
 
-test_task:  $(OBJECTS)  
+pcompare:  $(OBJECTS)  
 	$(LINK) $(LFLAGS) -o $(TARGET) $(OBJECTS) $(OBJCOMP) $(LIBS)
 
 
-all: Makefile test_task
+all: Makefile pcompare
 
 clean: 
 	-$(DEL_FILE) $(OBJECTS)
@@ -58,4 +58,6 @@ distclean: clean
 
 main.o: main.c 
 	$(CC) -c $(CFLAGS) $(INCPATH) -o main.o main.c
+rpmvercmp.o: rpmvercmp.c 
+	$(CC) -c $(CFLAGS) $(INCPATH) -o rpmvercmp.o rpmvercmp.c
 

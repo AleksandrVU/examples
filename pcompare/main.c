@@ -16,7 +16,7 @@
 #include <pthread.h>
 #include <curl/curl.h>
 #include <errno.h>
-#include <assert.h>
+#include "rpmvercmp.h"
 
 #define PACKAGE_URL "https://rdb.altlinux.org/api/export/branch_binary_packages/"
 #define PACKAGE1                        "p9"
@@ -25,6 +25,7 @@
 #define N_BRANCHES_TO_COMPARE_SUPPORTED 2       //number of comparing branches supported
 #define ERROR                           -1
 #define SUCCESS                         0
+#define MAX_VERSION_LEN                 128
 #define MAX_FILE_NAME_LEN               128
 #define MAX_COMMAND_LEN                 256
 #define HEADER_STR_LEN                  64
@@ -301,73 +302,6 @@ int compare_tags(json_object **iters, const size_t n_branches, const char *tag)
     return res;
 }
 
-typedef struct
-{
-    char    *pos;       //current string position
-    int     ival;       //integer version value
-    char    cval;       //symbol version value
-}version_parse_struct_t;
-
-int get_version_part(version_parse_struct_t *v_parser)
-{
-    char *cpos = v_parser->pos;
-    int counter = 0;
-    int val = 0;
-
-    v_parser->ival = 0;
-    v_parser->cval = 0;
-
-    while(*cpos)
-    {
-        if ((counter)&&(*cpos>='0')&&(*cpos<='9'))
-        {
-            val*=10;
-        }
-        switch (*cpos)
-        {
-            case '.' :
-                v_parser->ival= val;
-                v_parser->pos = cpos + 1;
-                return counter;
-            case '0':
-                break;
-            case '1':
-                val += 1;
-                break;
-            case '2':
-                val += 2;
-                break;
-            case '3':
-                val += 3;
-                break;
-            case '4':
-                val += 4;
-                break;
-            case '5':
-                val += 5;
-                break;
-            case '6':
-                val += 6;
-                break;
-            case '7':
-                val += 7;
-                break;
-            case '8':
-                val += 8;
-                break;
-            case '9':
-                val += 9;
-                break;
-            default:
-                v_parser->cval = *cpos;
-        }
-        ++cpos;
-        ++counter;
-    }
-    v_parser->ival= val;
-    v_parser->pos = cpos;
-    return counter;
-}
 
 /**
  * @brief compare_versions  - compare 2 JSON versions' strings
@@ -379,34 +313,15 @@ int compare_versions(json_object **iters, const size_t n_branches)
 {
 
     json_object * tag_obj[n_branches];
-    version_parse_struct_t parsers[n_branches];
     size_t j;
-    int res;
     for(j = 0; j < n_branches; ++j)
             tag_obj[j] = json_object_object_get(iters[j], VERSION_TAG);
     const char * tag_val[n_branches];
     for(j = 0; j < n_branches; ++j)
     {
         tag_val[j] = json_object_get_string(tag_obj[j]);
-        parsers[j].pos = (char*)tag_val[j];
-      //  printf("version val[%lu] = %s\n", j, tag_val[j]);
     }
-    while (1)
-    {
-        for(j = 0; j < n_branches; ++j)
-            res = get_version_part(&parsers[j]);
-
-        res = parsers[0].ival - parsers[1].ival; //if we have different version numbers
- //       printf("ires = %d (%d-%d)\n",res,parsers[0].ival, parsers[1].ival);
-        if (res) return res;
-
-        res = parsers[0].cval - parsers[1].cval; //if we have different subversion symbols
-   //     printf("cres = %d\n",res);
-        if (res) return res;
-        if ((*(parsers[0].pos))||(*(parsers[1].pos))) continue;
-        break;
-    }
-    return EQUAL;
+    return rpmvercmp(tag_val[0], tag_val[1]);
 }
 
 /**
@@ -682,7 +597,6 @@ static void out_statistic_array(const char *header, const size_t *index_array,  
 
 }
 
-
 /**
  * @brief out_branches_statistic    output branches comparison statistic. (NOTE - released for 2 branches only!)
  * @param fparam                    pointer to an array of f_param_t structures
@@ -776,12 +690,12 @@ int main(int argc, char *argv[])
     printf("We'll compare package \"%s\" with \"%s\" one\n", fparam[0].pack_name, fparam[1].pack_name);
 
     /* Packages loading */
-    ///UNCOMMENT ME!!! int resl = load_packages(fparam, n_branches_to_compare);
-    ///UNCOMMENT ME!!! if (resl != SUCCESS)
-    ///UNCOMMENT ME!!! {
-    ///UNCOMMENT ME!!!     printf("Load error!\n");
-    ///UNCOMMENT ME!!!     return resl;
-    ///UNCOMMENT ME!!! }
+    int resl = load_packages(fparam, n_branches_to_compare);
+    if (resl != SUCCESS)
+    {
+        printf("Load error!\n");
+        return resl;
+    }
 
     /* Mapping loading files */
     int res = mapping_files(fparam, n_branches_to_compare);
