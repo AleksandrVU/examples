@@ -1,6 +1,6 @@
 /**
  *  A.V.Ustinov <austinprog@yandex.ru>
- * The utility downloads two branches from PACKAGE_URL, compare them,
+ * The library allows to download two branches from PACKAGE_URL, compare them,
  * and output comparison statistic in JSON format that includes 3 arrays:
  * 1. Which packages is absent in first branch
  * 2. Which packages is absent in second branch
@@ -17,35 +17,25 @@
 #include <curl/curl.h>
 #include <errno.h>
 #include "rpmvercmp.h"
+#include "pcompare.h"
 
 #define PACKAGE_URL "https://rdb.altlinux.org/api/export/branch_binary_packages/"
 #define PACKAGE1                        "p9"
 #define PACKAGE2                        "p10"
 #define EQUAL                           0
-#define N_BRANCHES_TO_COMPARE_SUPPORTED 2       //number of comparing branches supported
-#define ERROR                           -1
-#define SUCCESS                         0
+
 #define MAX_VERSION_LEN                 128
 #define MAX_FILE_NAME_LEN               128
 #define MAX_COMMAND_LEN                 256
 #define HEADER_STR_LEN                  64
 #define N_BRANCHES_TO_CHECK_VERSION     1       // number of branches to check
 #define BRANCH_TO_CHECK_VERSION         0       // branch number to check newer wersion
+#define N_OUT_PARAMS                    3       // number of package's parameters to output
 
 const char *ARCH_TAG     = "arch";
 const char *NAME_TAG     = "name";
 const char *VERSION_TAG  = "version";
 const char *PACKAGES_TAG = "packages";
-
-// structure to store JSON file parameters
-typedef struct f_param
-{
-    const char  *pack_name; //package branch name
-    int         fd;         //opened file descripror
-    size_t      size;       //file size
-    void        *fptr;      //mapped file data pointer
-    json_object *wrapper;   //main JSON object pointer
- }f_param_t;
 
 //structure to store branches comparison statistic
 typedef struct
@@ -56,6 +46,13 @@ typedef struct
     size_t version_counter;                                             //counter of first packages with newer version value
     size_t n_branches;                                                  //number of branches to compare (for the release it 2)
 }branches_statistic_t;
+
+//structure to pass parameters
+typedef struct
+{
+    const f_param_t *file_parameters;   //pointer to f_param_t structure
+    json_object     *json_wrapper;      //pointer to main JSON-file structure
+}parse_parameter_t;
 
 // structure to store JSON packets array information
 typedef struct
@@ -74,12 +71,44 @@ typedef enum
 }continue_result_t;
 
 /**
- * @brief close_files   unmap and close files with JSON packages info
- * @param fparam    pointer to an array of f_param_t strictures
- * @param count     number of opened files
+ * @brief check_input_parameters    validates input parameters
+ * @param fparam                    pointer to an array of f_param_t structure
+ * @param count                     must be 2
+ * @return                          SUCCESS on valid parameters, ERROR otherwise
  */
-static void close_files(f_param_t *fparam, const int count)
+static int check_input_parameters(f_param_t *fparam, const size_t count)
 {
+    if (!fparam)
+    {
+        printf("Invalid input parameter!\n");
+        return ERROR;
+    }
+    if (count != N_BRANCHES_TO_COMPARE_SUPPORTED)
+    {
+        printf("We support 2 branches comparison only!\n");
+        return ERROR;
+    }
+    if (!fparam->pack_name)
+    {
+        printf("Package name was not set!\n");
+        return ERROR;
+    }
+    if (!fparam->pack_name[0])
+    {
+        printf("Package name was not set!\n");
+        return ERROR;
+    }
+
+    return SUCCESS;
+}
+
+int pcompare_close_files(f_param_t *fparam, const int count)
+{
+    if (!fparam)
+    {
+        printf("pcompare_open_downloaded_files: invalid input parameter!\n");
+        return ERROR;
+    }
     for ( int i =0; i < count; ++i)
     {
         if (fparam[i].fptr)
@@ -93,7 +122,7 @@ static void close_files(f_param_t *fparam, const int count)
             fparam[i].fd = -1;
         }
     }
-
+    return SUCCESS;
 }
 
 /**
@@ -143,12 +172,12 @@ static int map_file(f_param_t * fparam)
  */
 void * json_file_parse(void * param)
 {
-    f_param_t *fparam = (f_param_t*)param;
+    parse_parameter_t *pparam = (parse_parameter_t*)param;
 
-    printf("Parsing \"%s\" file...\n", fparam->pack_name);
+    printf("Parsing \"%s\" file...\n", pparam->file_parameters->pack_name);
 
-    fparam->wrapper = json_tokener_parse(fparam->fptr);
-    printf("\"%s\" file parsing finished.\n", fparam->pack_name);
+    pparam->json_wrapper = json_tokener_parse(pparam->file_parameters->fptr);
+    printf("\"%s\" file parsing finished.\n", pparam->file_parameters->pack_name);
 
     return NULL;
 }
@@ -216,71 +245,39 @@ int json_load(const f_param_t *fparam)
     return SUCCESS;
 }
 
-/**
- * @brief load_packages  loads packages information to appropriated file
- * @param fparam        - pointer to a f_param_t structure
- * @param n_branches    - number of branches
- * @return              SUCCESS on success, ERROR otherwise
- */
-int load_packages(f_param_t *fparam, const size_t n_branches)
+int pcompare_load_files(f_param_t *fparam, const size_t n_branches)
 {
+    if (check_input_parameters(fparam, n_branches) != SUCCESS)
+        return ERROR;
     for (size_t i=0; i < n_branches; ++i)
     {
        int res = json_load(&fparam[i]);
        if (res != SUCCESS)
        {
-           close_files(fparam, i);
+           pcompare_close_files(fparam, i);
            return res;
        }
     }
     return SUCCESS;
 }
 
-/**
- * @brief mapping_files maps files with loaded JSON structures
- * @param fparam        - pointer to f_param_t structure
- * @param n_branches    - number of branches
- * @return              SUCCESS on success, ERROR otherwise
- */
-int mapping_files(f_param_t *fparam, const size_t n_branches)
+int pcompare_open_downloaded_files(f_param_t *fparam, const size_t n_branches)
 {
+    if (check_input_parameters(fparam, n_branches) != SUCCESS)
+        return ERROR;
     for (size_t i=0; i < n_branches; ++i)
     {
         int res = map_file(&fparam[i]);
         if (res != SUCCESS)
         {
             printf("Mapping \"%s.json\" file error\n", fparam->pack_name);
-            close_files(fparam, i);
+            pcompare_close_files(fparam, i);
             return res;
         }
     }
     return SUCCESS;
 }
 
-/**
- * @brief parsing_json_files - parsing JSON files in separate threads
- * @param fparam            - pointer to f_param_t structure
- * @param n_branches        - number of branches
- * @return                  SUCCESS on success, ERROR otherwise
- */
-int parsing_json_files(f_param_t *fparam, const size_t n_branches)
-{
-    pthread_t parse_thread[n_branches];
-    size_t i = 0;
-    int res = SUCCESS;
-    for (; i < n_branches; ++i)
-    {
-        pthread_create(&parse_thread[i], NULL, json_file_parse, &fparam[i]);
-    }
-    for (i = 0; i < n_branches; ++i)
-    {
-        pthread_join(parse_thread[i], NULL);
-        if(!fparam[i].wrapper)
-            res = ERROR;
-    }
-
-    return res;
-}
 
 /**
  * @brief compare_tags  - compare 2 JSON strings values
@@ -351,29 +348,6 @@ continue_result_t next_position_depend_on_compare_result(const int res, size_t *
         ++counters[1];
     }
     return cont_result;
-}
-
-#define N_OUT_PARAMS    3
-/**
- * @brief compare_out - output comparible branches packages, the function is for debug only
- * @param iter        - pointer to an array of branches packet JSON objects
- * @param n_branches  - number of branches to compare
- */
-void compare_out(const json_object **iter, const size_t n_branches)
-{
-    const char *tags_to_out[N_OUT_PARAMS] = {NAME_TAG, VERSION_TAG, ARCH_TAG};
-    printf("\n{\n");
-    for (size_t i = 0; i < N_OUT_PARAMS; ++i)
-    {
-        for (size_t j = 0; j < n_branches; ++j)
-        {
-            json_object * cobj = json_object_object_get(iter[j], tags_to_out[i]);
-            const char *str =  json_object_get_string(cobj);
-            printf("%32s", str);
-        }
-        printf("\n");
-    }
-    printf("}\n");
 }
 
 /**
@@ -630,19 +604,71 @@ static void out_branches_statistic(const f_param_t *fparam, const json_packages_
 }
 
 /**
- * @brief process_branches  comparing packages' branches and output the result
- * @param fparam            pointer to an array of f_param_t structures
- * @param n_branches        number of branches to process
- * @return                  SUCCESS code on success, ERROR code otherwise
+ * @brief parsing_json_files - parsing JSON files in separate threads
+ * @param fparam            - pointer to f_param_t structure
+ * @param n_branches        - number of branches
+ * @return                  SUCCESS on success, ERROR otherwise
  */
-static int process_branches(const f_param_t *fparam, const size_t n_branches)
+static int parsing_json_files(const f_param_t *fparam, json_object **wrappers, const size_t n_branches)
 {
-    json_packages_t packages_info[n_branches];
-    size_t i = 0;
-
-    for (; i < n_branches; ++i)
+    pthread_t parse_thread[n_branches];
+    parse_parameter_t parsers[n_branches];
+    size_t i;
+    for (i = 0 ; i < n_branches; ++i)
     {
-        if (get_packages_info(fparam[i].wrapper, &packages_info[i]) != SUCCESS)
+        parsers[i].file_parameters = &fparam[i];
+        parsers[i].json_wrapper = NULL;
+    }
+    int res = SUCCESS;
+    for (i = 0 ; i < n_branches; ++i)
+    {
+        pthread_create(&parse_thread[i], NULL, json_file_parse, &parsers[i]);
+    }
+    for (i = 0; i < n_branches; ++i)
+    {
+        pthread_join(parse_thread[i], NULL);
+        if(!parsers[i].json_wrapper)
+        {
+            res = ERROR;
+        }
+        else
+        {
+            wrappers[i] = parsers[i].json_wrapper;
+        }
+    }
+
+    return res;
+}
+
+int pcompare_process_branches(const f_param_t *fparam, const size_t n_branches)
+{
+    if (check_input_parameters((f_param_t *)fparam, n_branches) != SUCCESS)
+        return ERROR;
+
+    json_object *wrappers[n_branches];
+    json_packages_t packages_info[n_branches];
+    size_t i;
+
+     for (i = 0; i < n_branches; ++i)
+     {
+         if ((fparam[i].fd<0)||(!fparam[i].fptr)||!fparam[i].size)
+         {
+             printf("File %s.json was not initiated for reading!\n", fparam[i].pack_name);
+             return ERROR;
+         }
+     }
+
+    /* Parsing packages files */
+    int res = parsing_json_files(fparam, wrappers, n_branches);
+    if (res != SUCCESS)
+    {
+        printf("Parsing error!\n");
+        return res;
+    }
+
+    for (i = 0; i < n_branches; ++i)
+    {
+        if (get_packages_info(wrappers[i], &packages_info[i]) != SUCCESS)
         {
             return ERROR;
         }
@@ -662,62 +688,9 @@ static int process_branches(const f_param_t *fparam, const size_t n_branches)
         destroy_branch_statistic(&branches_statistic);
         return ERROR;
     }
+
     out_branches_statistic(fparam, packages_info, &branches_statistic);
     destroy_branch_statistic(&branches_statistic);
+
     return SUCCESS;
-}
-
-/**
- * @brief main  the main function of the utility
- * @param argc  number of atguments
- * @param argv  pointer to an array of srting arguments
- * @return      SUCCESS code on success, ERROR code otherwise
- */
-int main(int argc, char *argv[])
-{
-    const size_t n_branches_to_compare = N_BRANCHES_TO_COMPARE_SUPPORTED;
-    f_param_t fparam[n_branches_to_compare];
-
-    if (argc != (N_BRANCHES_TO_COMPARE_SUPPORTED + 1))
-    {
-        printf("Please, enter %d names of branches\n", N_BRANCHES_TO_COMPARE_SUPPORTED);
-        return ERROR;
-    }
-
-    fparam[0].pack_name = argv[1];
-    fparam[1].pack_name = argv[2];
-
-    printf("We'll compare package \"%s\" with \"%s\" one\n", fparam[0].pack_name, fparam[1].pack_name);
-
-    /* Packages loading */
-    int resl = load_packages(fparam, n_branches_to_compare);
-    if (resl != SUCCESS)
-    {
-        printf("Load error!\n");
-        return resl;
-    }
-
-    /* Mapping loading files */
-    int res = mapping_files(fparam, n_branches_to_compare);
-    if (res != SUCCESS)
-    {
-        printf("Mapping error!\n");
-        return res;
-    }
-
-    /* Parsing packages files */
-    res = parsing_json_files(fparam, n_branches_to_compare);
-    if (res != SUCCESS)
-    {
-        printf("Parsing error!\n");
-        close_files(fparam, n_branches_to_compare);
-        return res;
-    }
-    /*Compares branches an out result JSON */
-    res = process_branches(fparam, n_branches_to_compare);
-
-
-    close_files(fparam, n_branches_to_compare);
-
-    return res;
 }

@@ -1,3 +1,5 @@
+#ifndef __RPMVERCMP_H_
+#define __RPMVERCMP_H_
 /*
  * This code is taken from the RPM package manager.
  *
@@ -17,3 +19,4 @@
  * @return		+1 if a is "newer", 0 if equal, -1 if b is "newer"
  */
 int rpmvercmp(const char * a, const char * b);
+#endif //__RPMVERCMP_H_
