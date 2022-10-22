@@ -14,5 +14,5 @@ Librmevercmp library included here as well. It is built from source code that ha
 
 Utility "ucompare" use libpcompare to load packages information from two branches
 Usage:
- compare p9 p10
+ ucompare p9 p10
 
