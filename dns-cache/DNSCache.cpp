@@ -1,10 +1,11 @@
-#include "DNSCache.h"
+﻿#include "DNSCache.h"
 #include <iostream>
 
 const unsigned long MAX_CACHE_SIZE = 8;
 
 std::string DNSCache::resolve(const std::string& name) const
 {
+    std::shared_lock<std::shared_timed_mutex> lock(mtx);
     const auto it = dnsCache.find(name);
     if (it == dnsCache.end()) return std::string("");
     return  it->second;
@@ -20,6 +21,7 @@ void DNSCache::deleteOldestItem()
 
 void DNSCache::addToCache(const std::string &name, const std::string &ip)
 {
+
     if (dnsCache.size() >= MAX_CACHE_SIZE)
     {
         deleteOldestItem();
@@ -30,15 +32,15 @@ void DNSCache::addToCache(const std::string &name, const std::string &ip)
 
 void DNSCache::update(const std::string &name, const std::string &ip)
 {
-    mtx.lock();
+    std::unique_lock<std::shared_timed_mutex> lock(mtx);
     const auto it = dnsCache.find(name);
     if (it == dnsCache.end()) addToCache(name, ip);
     else it->second = ip;
-    mtx.unlock();
 }
 
 void DNSCache::showTable()
 {
+    std::shared_lock<std::shared_timed_mutex> lock(mtx);
     size_t count =0;
     for (auto it : dnsCache)
     {

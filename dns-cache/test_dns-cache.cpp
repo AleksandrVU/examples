@@ -33,8 +33,11 @@ void updateDNS(DNSCache *dnsCache, int num)
     string name = "name_" + numS;//to_string(num);
     string ip = "192.168.1." + numS;
    // std::cout << name << " - " << ip << std::endl;
-    dnsCache->update(name,ip);
     string getIp = dnsCache->resolve(name);
+    if (getIp!="")
+        std::cout << "resolved "<< name << " - " << getIp << std::endl;
+    dnsCache->update(name,ip);
+    getIp = dnsCache->resolve(name);
    // std::cout << "resolved "<< name << " - " << getIp << std::endl;
 
 }

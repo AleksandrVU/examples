@@ -2,7 +2,6 @@
 #define DNSCACHE_H
 #include "IDNSCache.h"
 #include <map>
-#include <mutex>
 #include <shared_mutex>
 #include <queue>
 
@@ -20,7 +19,8 @@ private:
     void operator delete(void*) = delete;
     void operator delete[](void*) = delete;
 
-    std::mutex mtx;
+    mutable std::shared_timed_mutex mtx;
+    //std::mutex rmtx;
     std::map<std::string,std::string> dnsCache;
     std::queue<std::string> dnsQueue;
 
