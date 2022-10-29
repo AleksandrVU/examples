@@ -1,10 +1,7 @@
 .PHONY: all dist clean distclean 
 MAKE = make
 
-all :
-	+$(MAKE) --directory=./librpmvercmp
-	+$(MAKE) --directory=./libpcompare
-	+$(MAKE) --directory=./ucompare
+all : dist
 
 dist :
 	+$(MAKE) --directory=./librpmvercmp dist

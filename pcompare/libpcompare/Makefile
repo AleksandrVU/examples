@@ -1,3 +1,4 @@
+VERSION       = 1.0.0
 CC            = gcc
 CXX           = g++
 CFLAGS        = -Wall -g -O -fPIC
@@ -27,7 +28,8 @@ DISTHDR       = ../include
 HEADER        = pcompare.h
 SOURCES       = pcompare.c
 OBJECTS       = pcompare.o
-TARGET        = libpcompare.so
+NAME          = libpcompare.so
+TARGET        = $(NAME).$(VERSION)
 
 first: all
 ####### Build rules
@@ -45,12 +47,14 @@ clean:
 distclean: clean 
 	-$(DEL_FILE) $(TARGET)
 	-$(DEL_FILE) $(DISTLIB)/$(TARGET) 
+	$(DEL_FILE) $(DISTLIB)/$(NAME) 
 
 dist: $(TARGET)
 	$(MK_DIR) $(DISTHDR)
 	$(MK_DIR) $(DISTLIB)	
 	$(COPY) $(TARGET) $(DISTLIB)
 	$(COPY) $(HEADER) $(DISTHDR)
+	$(SYMLINK) $(DISTLIB)/$(TARGET) $(DISTLIB)/$(NAME)
 ####### Compile
 pcompare.o: pcompare.c 
 	$(CC) -c $(CFLAGS) $(INCPATH) -o pcompare.o pcompare.c

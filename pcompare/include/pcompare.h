@@ -2,12 +2,13 @@
 #define __PCOMPARE_H_
 /**
  *  A.V.Ustinov <austinprog@yandex.ru>
- * The utility downloads two branches from PACKAGE_URL, compare them,
- * and output comparison statistic in JSON format that includes 3 arrays:
+ * The header file of the libpcompare library that allows to download two packages' branches ,
+ * compare them, and output comparison statistic in JSON format that includes 3 arrays:
  * 1. Which packages is absent in first branch
  * 2. Which packages is absent in second branch
  * 3. All packages in first branch with newer version then in second one
  */
+
 #include <stddef.h>
 
 /**

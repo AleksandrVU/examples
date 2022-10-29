@@ -1,3 +1,4 @@
+VERSION       = 1.0.0
 CC            = gcc
 CXX           = g++
 CFLAGS        = -Wall -g -O -fPIC
@@ -28,7 +29,8 @@ DISTHDR       = ../include
 HEADER        = rpmvercmp.h
 SOURCES       = rpmvercmp.c
 OBJECTS       = rpmvercmp.o
-TARGET        = librpmvercmp.so
+NAME          = librpmvercmp.so
+TARGET        = $(NAME).$(VERSION)
 
 first: all
 ####### Build rules
@@ -46,12 +48,14 @@ clean:
 distclean: clean 
 	-$(DEL_FILE) $(TARGET) 
 	-$(DEL_FILE) $(DISTLIB)/$(TARGET)
+	-$(DEL_FILE) $(DISTLIB)/$(NAME)
 
 dist: $(TARGET)
 	$(MK_DIR) $(DISTHDR)
 	$(MK_DIR) $(DISTLIB)	
 	$(COPY) $(TARGET) $(DISTLIB)
 	$(COPY) $(HEADER) $(DISTHDR)
+	$(SYMLINK) $(DISTLIB)/$(TARGET) $(DISTLIB)/$(NAME) 
 ####### Compile
 rpmvercmp.o: rpmvercmp.c 
 	$(CC) -c $(CFLAGS) $(INCPATH) -o rpmvercmp.o rpmvercmp.c
