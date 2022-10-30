@@ -20,7 +20,6 @@ private:
     void operator delete[](void*) = delete;
 
     mutable std::shared_timed_mutex mtx;
-    //std::mutex rmtx;
     std::map<std::string,std::string> dnsCache;
     std::queue<std::string> dnsQueue;
 
