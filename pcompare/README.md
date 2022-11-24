@@ -4,7 +4,7 @@ It outputs comparison statistic in JSON format that includes 3 arrays:
  2. Which packages is absent in second branch
  3. All packages in first branch with newer version then in second one
 
-The library has dependency from 3 libraries:
+The library has dependency from 4 libraries:
 1. libpthread
 2. libcurl
 3. libjson-c
